@@ -116,6 +116,169 @@
   --sidebar-ring: oklch(0.556 0 0);
 }
 
+/*
+ * Admin dashboard theme.
+ *
+ * Scoped to `.admin-shell` so the public portfolio keeps its own green theme.
+ * Deep navy surfaces with electric blue / indigo / violet accents.
+ */
+.admin-shell {
+  --radius: 0.75rem;
+
+  --background: #080d16;
+  --foreground: #f5f7ff;
+  --card: #111b2a;
+  --card-foreground: #f5f7ff;
+  --popover: #0f1827;
+  --popover-foreground: #f5f7ff;
+
+  --primary: #4f46ff;
+  --primary-foreground: #f5f7ff;
+  --secondary: #1a2740;
+  --secondary-foreground: #d5def0;
+  --muted: #16223a;
+  --muted-foreground: #91a2bd;
+  --accent: #1c2a45;
+  --accent-foreground: #f5f7ff;
+
+  --destructive: #ff4d5a;
+  --border: #233149;
+  --input: #233149;
+  --ring: #6d68ff;
+
+  --sidebar: #0d1524;
+  --sidebar-foreground: #c6d3e8;
+  --sidebar-primary: #4f46ff;
+  --sidebar-primary-foreground: #f5f7ff;
+  --sidebar-accent: #17233b;
+  --sidebar-accent-foreground: #f5f7ff;
+  --sidebar-border: #1d2a41;
+  --sidebar-ring: #6d68ff;
+
+  --admin-success: #10d6a0;
+  --admin-warning: #f5b82e;
+  --admin-violet: #9333ea;
+  --admin-gradient: linear-gradient(135deg, #4f46ff 0%, #7c3aed 55%, #9333ea 100%);
+
+  color: var(--foreground);
+  background-color: var(--background);
+}
+
+/* Soft ambient glow for the admin backdrop. */
+.admin-shell {
+  background-image:
+    radial-gradient(
+      ellipse 45% 35% at 12% -8%,
+      color-mix(in oklab, #4f46ff 22%, transparent),
+      transparent 70%
+    ),
+    radial-gradient(
+      ellipse 40% 30% at 100% 0%,
+      color-mix(in oklab, #9333ea 16%, transparent),
+      transparent 70%
+    );
+  background-attachment: fixed;
+}
+
+/* ==========================================================================
+   Admin design-system utilities
+   ========================================================================== */
+
+.admin-shell .surface {
+  background-color: color-mix(in oklab, var(--card) 88%, transparent);
+  border: 1px solid var(--border);
+  backdrop-filter: blur(12px);
+}
+
+.admin-shell .surface-hover {
+  transition:
+    border-color 180ms ease,
+    background-color 180ms ease,
+    transform 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.admin-shell .surface-hover:hover {
+  border-color: color-mix(in oklab, var(--ring) 55%, var(--border));
+  box-shadow: 0 12px 40px -20px color-mix(in oklab, #4f46ff 70%, transparent);
+}
+
+.admin-shell .gradient-text {
+  background: var(--admin-gradient);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.admin-shell .accent-gradient {
+  background-image: var(--admin-gradient);
+}
+
+.admin-shell .sidebar-active {
+  background-image: var(--admin-gradient);
+  color: #fff;
+  box-shadow: 0 10px 30px -14px color-mix(in oklab, #4f46ff 90%, transparent);
+}
+
+.admin-shell .kbd {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.6875rem;
+  line-height: 1;
+  padding: 0.25rem 0.375rem;
+  border-radius: 0.375rem;
+  border: 1px solid var(--border);
+  background-color: color-mix(in oklab, var(--muted) 70%, transparent);
+  color: var(--muted-foreground);
+}
+
+.admin-shell .skeleton {
+  position: relative;
+  overflow: hidden;
+  background-color: color-mix(in oklab, var(--muted) 60%, transparent);
+}
+
+.admin-shell .skeleton::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background-image: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in oklab, var(--foreground) 8%, transparent),
+    transparent
+  );
+  animation: admin-shimmer 1.4s infinite;
+}
+
+@keyframes admin-shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* Refined scrollbar within the admin panel. */
+.admin-shell ::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+.admin-shell ::-webkit-scrollbar-thumb {
+  background-color: color-mix(in oklab, var(--border) 90%, transparent);
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .admin-shell *,
+  .admin-shell *::before,
+  .admin-shell *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

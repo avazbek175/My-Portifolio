@@ -1,16 +1,28 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Pencil, Plus, Search, Star, Trash2 } from 'lucide-react';
+import {
+  FileText,
+  Pencil,
+  Plus,
+  Search as SearchIcon,
+  Star,
+  Trash2,
+} from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import {
-  EmptyState,
-  ErrorBanner,
-  LoadingState,
-  PageHeader,
-  StatusPill,
-} from '@/admin/components/ui';
+  EmptyStateBlock,
+  FilterSelect,
+  Pagination,
+  SearchInput,
+  SectionCard,
+  Skeleton,
+  StatCard,
+} from '@/admin/components/design';
+import { formatRelative } from '@/admin/components/format';
+import { ErrorBanner, PageHeader, StatusPill } from '@/admin/components/ui';
+import { ConfirmDialog } from '@/admin/components/ConfirmDialog';
+import { useToast } from '@/admin/components/toast-context';
 import { cn } from '@/lib/utils';
 import {
   deleteProject,
@@ -19,18 +31,26 @@ import {
   setProjectStatus,
 } from '@/admin/admin-api';
 import { useAsync } from '@/admin/hooks/useAsync';
+import type { Project } from '@/lib/cms-types';
 
 type StatusFilter = 'all' | 'draft' | 'published';
 
-const filters: StatusFilter[] = ['all', 'published', 'draft'];
-
 export const ProjectsPage = () => {
+  const toast = useToast();
   const [status, setStatus] = useState<StatusFilter>('all');
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<Project | null>(null);
+
+  useEffect(() => {
+    const handle = window.setTimeout(() => {
+      setSearch(searchInput.trim());
+      setPage(1);
+    }, 300);
+    return () => window.clearTimeout(handle);
+  }, [searchInput]);
 
   const { data, loading, error, reload } = useAsync(
     () =>
@@ -43,28 +63,48 @@ export const ProjectsPage = () => {
     [status, search, page],
   );
 
-  const run = async (id: string, action: () => Promise<unknown>) => {
+  const stats = useMemo(() => {
+    const items = data?.items ?? [];
+    return {
+      total: data?.total ?? 0,
+      published: items.filter((project) => project.status === 'published').length,
+      featured: items.filter((project) => project.featured).length,
+    };
+  }, [data]);
+
+  const run = async (id: string, action: () => Promise<unknown>, successMessage?: string) => {
     setBusyId(id);
-    setActionError(null);
     try {
       await action();
+      if (successMessage) toast.success(successMessage);
       reload();
     } catch (cause) {
-      setActionError(cause instanceof Error ? cause.message : 'Action failed');
+      toast.error('Action failed', cause instanceof Error ? cause.message : undefined);
     } finally {
       setBusyId(null);
     }
   };
 
-  const handleDelete = (id: string, title: string) => {
-    if (!window.confirm(`Delete "${title}"? This cannot be undone.`)) return;
-    void run(id, () => deleteProject(id));
+  const handleDelete = async () => {
+    if (!pendingDelete) return;
+    setBusyId(pendingDelete.id);
+    try {
+      await deleteProject(pendingDelete.id);
+      toast.success('Project deleted', pendingDelete.title);
+      setPendingDelete(null);
+      if (data && data.items.length === 1 && page > 1) setPage((value) => value - 1);
+      else reload();
+    } catch (cause) {
+      toast.error('Could not delete project', cause instanceof Error ? cause.message : undefined);
+    } finally {
+      setBusyId(null);
+    }
   };
 
-  const totalPages = data ? Math.max(1, Math.ceil(data.total / data.pageSize)) : 1;
+  const showEmpty = !loading && data && data.items.length === 0;
 
   return (
-    <div>
+    <div className='space-y-6'>
       <PageHeader
         title='Projects'
         description='Create, publish and reorder your portfolio projects.'
@@ -78,181 +118,192 @@ export const ProjectsPage = () => {
         }
       />
 
-      <div className='mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between'>
-        <div className='flex gap-1 rounded-lg border border-border p-1'>
-          {filters.map((filter) => (
-            <button
-              key={filter}
-              type='button'
-              onClick={() => {
-                setStatus(filter);
-                setPage(1);
-              }}
-              className={cn(
-                'rounded-md px-3 py-1.5 text-sm capitalize transition-colors',
-                status === filter
-                  ? 'bg-primary text-primary-foreground'
-                  : 'text-muted-foreground hover:text-foreground',
-              )}
-            >
-              {filter}
-            </button>
-          ))}
-        </div>
-
-        <form
-          className='flex w-full gap-2 sm:w-auto'
-          onSubmit={(event) => {
-            event.preventDefault();
-            setSearch(searchInput.trim());
-            setPage(1);
-          }}
-        >
-          <Input
-            value={searchInput}
-            onChange={(event) => setSearchInput(event.target.value)}
-            placeholder='Search projects…'
-          />
-          <Button type='submit' variant='outline' size='icon' aria-label='Search'>
-            <Search />
-          </Button>
-        </form>
+      <div className='grid gap-4 sm:grid-cols-3'>
+        <StatCard label='Total projects' value={stats.total} icon={FileText} tone='primary' />
+        <StatCard
+          label='Published (page)'
+          value={stats.published}
+          icon={Star}
+          tone='success'
+        />
+        <StatCard label='Featured (page)' value={stats.featured} icon={Star} tone='violet' />
       </div>
 
-      <ErrorBanner message={error ?? actionError} />
-
-      {loading && !data ? (
-        <LoadingState />
-      ) : data && data.items.length > 0 ? (
-        <div className='overflow-hidden rounded-2xl border border-border'>
-          <table className='w-full text-sm'>
-            <thead className='bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground'>
-              <tr>
-                <th className='px-4 py-3 font-medium'>Title</th>
-                <th className='hidden px-4 py-3 font-medium sm:table-cell'>Category</th>
-                <th className='px-4 py-3 font-medium'>Status</th>
-                <th className='px-4 py-3 text-right font-medium'>Actions</th>
-              </tr>
-            </thead>
-            <tbody className='divide-y divide-border'>
-              {data.items.map((project) => (
-                <tr key={project.id} className='bg-card'>
-                  <td className='px-4 py-3'>
-                    <Link
-                      to={`/admin/projects/${project.id}`}
-                      className='font-medium text-foreground hover:text-primary'
-                    >
-                      {project.title}
-                    </Link>
-                    <div className='text-xs text-muted-foreground'>/{project.slug}</div>
-                  </td>
-                  <td className='hidden px-4 py-3 text-muted-foreground sm:table-cell'>
-                    {project.category}
-                  </td>
-                  <td className='px-4 py-3'>
-                    <div className='flex items-center gap-2'>
-                      <StatusPill status={project.status} />
-                      {project.featured && (
-                        <Star className='size-3.5 fill-primary text-primary' />
-                      )}
-                    </div>
-                  </td>
-                  <td className='px-4 py-3'>
-                    <div className='flex items-center justify-end gap-1'>
-                      <Button
-                        variant='ghost'
-                        size='icon-sm'
-                        disabled={busyId === project.id}
-                        title={project.featured ? 'Unfeature' : 'Feature'}
-                        onClick={() =>
-                          run(project.id, () =>
-                            setProjectFeatured(project.id, !project.featured),
-                          )
-                        }
-                      >
-                        <Star
-                          className={cn(
-                            'size-4',
-                            project.featured && 'fill-primary text-primary',
-                          )}
-                        />
-                      </Button>
-                      <Button
-                        variant='ghost'
-                        size='sm'
-                        disabled={busyId === project.id}
-                        onClick={() =>
-                          run(project.id, () =>
-                            setProjectStatus(
-                              project.id,
-                              project.status === 'published' ? 'draft' : 'published',
-                            ),
-                          )
-                        }
-                      >
-                        {project.status === 'published' ? 'Unpublish' : 'Publish'}
-                      </Button>
-                      <Button asChild variant='ghost' size='icon-sm' title='Edit'>
-                        <Link to={`/admin/projects/${project.id}`}>
-                          <Pencil />
-                        </Link>
-                      </Button>
-                      <Button
-                        variant='ghost'
-                        size='icon-sm'
-                        title='Delete'
-                        disabled={busyId === project.id}
-                        onClick={() => handleDelete(project.id, project.title)}
-                      >
-                        <Trash2 className='text-destructive' />
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ) : (
-        <EmptyState
-          title='No projects yet'
-          description='Create your first project to show it on the public site.'
-          action={
-            <Button asChild className='mt-2'>
-              <Link to='/admin/projects/new'>
-                <Plus />
-                New project
-              </Link>
-            </Button>
-          }
-        />
-      )}
-
-      {data && data.total > data.pageSize && (
-        <div className='mt-4 flex items-center justify-between text-sm text-muted-foreground'>
-          <span>
-            Page {data.page} of {totalPages} · {data.total} total
-          </span>
-          <div className='flex gap-2'>
-            <Button
-              variant='outline'
-              size='sm'
-              disabled={page <= 1}
-              onClick={() => setPage((value) => Math.max(1, value - 1))}
-            >
-              Previous
-            </Button>
-            <Button
-              variant='outline'
-              size='sm'
-              disabled={page >= totalPages}
-              onClick={() => setPage((value) => value + 1)}
-            >
-              Next
-            </Button>
+      <SectionCard>
+        <div className='flex flex-col gap-3 border-b border-border/60 p-4 sm:flex-row sm:items-center'>
+          <SearchInput
+            value={searchInput}
+            onChange={setSearchInput}
+            placeholder='Search projects…'
+            className='sm:max-w-xs'
+          />
+          <div className='flex items-center gap-2 sm:ml-auto'>
+            <FilterSelect
+              ariaLabel='Filter by status'
+              value={status}
+              onChange={(value) => {
+                setStatus(value as StatusFilter);
+                setPage(1);
+              }}
+              options={[
+                { value: 'all', label: 'All statuses' },
+                { value: 'published', label: 'Published' },
+                { value: 'draft', label: 'Draft' },
+              ]}
+            />
           </div>
         </div>
-      )}
+
+        <div className='p-4'>
+          <ErrorBanner message={error} />
+
+          {loading && !data ? (
+            <div className='space-y-2'>
+              {Array.from({ length: 6 }).map((_, index) => (
+                <Skeleton key={index} className='h-16 rounded-xl' />
+              ))}
+            </div>
+          ) : showEmpty ? (
+            <EmptyStateBlock
+              icon={search ? SearchIcon : FileText}
+              title={search ? 'No projects match your search' : 'No projects yet'}
+              description={
+                search
+                  ? 'Try a different search term or clear the filters.'
+                  : 'Create your first project to show it on the public site.'
+              }
+              action={
+                !search ? (
+                  <Button asChild className='mt-1'>
+                    <Link to='/admin/projects/new'>
+                      <Plus />
+                      New project
+                    </Link>
+                  </Button>
+                ) : undefined
+              }
+            />
+          ) : (
+            <ul className='space-y-2'>
+              {data?.items.map((project) => (
+                <li
+                  key={project.id}
+                  className='surface-hover flex flex-wrap items-center gap-3 rounded-xl border border-border/60 p-2.5 sm:flex-nowrap'
+                >
+                  <div className='size-14 shrink-0 overflow-hidden rounded-lg border border-border/60 bg-[color:var(--muted)]/40'>
+                    {project.coverUrl ? (
+                      <img
+                        src={project.coverUrl}
+                        alt={project.title}
+                        loading='lazy'
+                        className='size-full object-cover'
+                      />
+                    ) : (
+                      <span className='flex size-full items-center justify-center text-muted-foreground'>
+                        <FileText className='size-5' />
+                      </span>
+                    )}
+                  </div>
+
+                  <div className='min-w-0 flex-1'>
+                    <Link
+                      to={`/admin/projects/${project.id}`}
+                      className='flex items-center gap-2 text-sm font-medium text-foreground hover:text-primary'
+                    >
+                      <span className='truncate'>{project.title}</span>
+                      {project.featured && (
+                        <Star className='size-3.5 shrink-0 fill-[color:var(--admin-warning)] text-[color:var(--admin-warning)]' />
+                      )}
+                    </Link>
+                    <p className='truncate text-xs text-muted-foreground'>
+                      /{project.slug}
+                      {project.category ? ` · ${project.category}` : ''} · updated{' '}
+                      {formatRelative(project.updatedAt)}
+                    </p>
+                  </div>
+
+                  <div className='flex items-center gap-2'>
+                    <StatusPill status={project.status} />
+                    <Button
+                      variant='ghost'
+                      size='sm'
+                      disabled={busyId === project.id}
+                      onClick={() =>
+                        run(
+                          project.id,
+                          () => setProjectStatus(project.id, project.status === 'published' ? 'draft' : 'published'),
+                          project.status === 'published' ? 'Moved to draft' : 'Project published',
+                        )
+                      }
+                    >
+                      {project.status === 'published' ? 'Unpublish' : 'Publish'}
+                    </Button>
+                    <Button
+                      variant='ghost'
+                      size='icon-sm'
+                      disabled={busyId === project.id}
+                      title={project.featured ? 'Unfeature' : 'Feature'}
+                      aria-label={project.featured ? 'Unfeature project' : 'Feature project'}
+                      onClick={() =>
+                        run(
+                          project.id,
+                          () => setProjectFeatured(project.id, !project.featured),
+                          project.featured ? 'Removed from featured' : 'Marked as featured',
+                        )
+                      }
+                    >
+                      <Star
+                        className={cn(
+                          'size-4',
+                          project.featured && 'fill-[color:var(--admin-warning)] text-[color:var(--admin-warning)]',
+                        )}
+                      />
+                    </Button>
+                    <Button asChild variant='ghost' size='icon-sm' title='Edit' aria-label='Edit project'>
+                      <Link to={`/admin/projects/${project.id}`}>
+                        <Pencil className='size-4' />
+                      </Link>
+                    </Button>
+                    <Button
+                      variant='ghost'
+                      size='icon-sm'
+                      title='Delete'
+                      aria-label='Delete project'
+                      disabled={busyId === project.id}
+                      onClick={() => setPendingDelete(project)}
+                    >
+                      <Trash2 className='size-4 text-destructive' />
+                    </Button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {data && (
+            <Pagination
+              page={data.page}
+              pageSize={data.pageSize}
+              total={data.total}
+              onPageChange={setPage}
+            />
+          )}
+        </div>
+      </SectionCard>
+
+      <ConfirmDialog
+        open={Boolean(pendingDelete)}
+        onClose={() => setPendingDelete(null)}
+        onConfirm={handleDelete}
+        destructive
+        confirmLabel='Delete project'
+        title='Delete this project?'
+        description={
+          pendingDelete
+            ? `“${pendingDelete.title}” will be permanently removed. This cannot be undone.`
+            : undefined
+        }
+      />
     </div>
   );
 };

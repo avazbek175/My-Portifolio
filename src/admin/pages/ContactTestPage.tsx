@@ -3,10 +3,13 @@ import { useState, type FormEvent } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Card, ErrorBanner, Field, PageHeader, Spinner } from '@/admin/components/ui';
+import { ErrorBanner, Field, Spinner } from '@/admin/components/ui';
+import { SectionCard, SectionHeader } from '@/admin/components/design';
+import { useToast } from '@/admin/components/toast-context';
 import { apiFetch } from '@/lib/api';
 
 export const ContactTestPage = () => {
+  const toast = useToast();
   const [name, setName] = useState('Test');
   const [email, setEmail] = useState('test@example.com');
   const [subject, setSubject] = useState('Test');
@@ -26,19 +29,30 @@ export const ContactTestPage = () => {
         body: { name, email, subject, message },
       });
       setResult(`Message sent (id: ${response.id})`);
+      toast.success('Message delivered', `Contact id ${response.id}`);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Failed');
+      const messageText = cause instanceof Error ? cause.message : 'Failed';
+      setError(messageText);
+      toast.error('Could not send message', messageText);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div>
-      <PageHeader title='Contact API test' description='Post to /api/public/contact' />
+    <div className='space-y-6'>
+      <div className='flex flex-col gap-1'>
+        <h1 className='text-2xl font-semibold tracking-tight text-foreground'>Contact API test</h1>
+        <p className='text-sm text-muted-foreground'>
+          Send a test submission to <code className='text-foreground'>/api/public/contact</code>.
+        </p>
+      </div>
+
       <ErrorBanner message={error} />
-      <Card className='max-w-xl'>
-        <form onSubmit={submit} className='grid gap-4'>
+
+      <SectionCard className='max-w-xl'>
+        <SectionHeader title='Test submission' />
+        <form onSubmit={submit} className='grid gap-4 p-5'>
           <Field label='Name'>
             <Input value={name} onChange={(e) => setName(e.target.value)} />
           </Field>
@@ -51,12 +65,15 @@ export const ContactTestPage = () => {
           <Field label='Message'>
             <Textarea rows={4} value={message} onChange={(e) => setMessage(e.target.value)} />
           </Field>
-          <Button type='submit' disabled={loading}>
-            {loading ? <Spinner className='size-4' /> : null} Send
-          </Button>
-          {result && <p className='text-sm text-primary'>{result}</p>}
+          <div className='flex items-center justify-between gap-3'>
+            <Button type='submit' disabled={loading}>
+              {loading ? <Spinner className='size-4 border-white/40 border-t-white' /> : null}
+              Send
+            </Button>
+            {result && <p className='text-sm text-[color:var(--admin-success)]'>{result}</p>}
+          </div>
         </form>
-      </Card>
+      </SectionCard>
     </div>
   );
 };

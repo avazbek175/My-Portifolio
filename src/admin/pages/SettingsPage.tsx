@@ -1,16 +1,28 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { RefreshCw, ShieldCheck, UserCog } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Card, ErrorBanner, Field, LoadingState, PageHeader, Spinner } from '@/admin/components/ui';
+import {
+  EmptyStateBlock,
+  SectionCard,
+  SectionHeader,
+  Skeleton,
+} from '@/admin/components/design';
+import { formatRelative } from '@/admin/components/format';
+import { ErrorBanner, Field, Spinner } from '@/admin/components/ui';
+import { ConfirmDialog } from '@/admin/components/ConfirmDialog';
+import { useToast } from '@/admin/components/toast-context';
 import { changePassword, listSessions, revokeSession, updateProfile } from '@/admin/admin-api';
 import { useAsync } from '@/admin/hooks/useAsync';
 import { useAuth } from '@/context/useAuth';
+import type { SessionSummary } from '@/lib/cms-types';
 
 export const SettingsPage = () => {
   const { admin, setAdmin, logout } = useAuth();
   const navigate = useNavigate();
+  const toast = useToast();
 
   const [name, setName] = useState(admin?.name ?? '');
   const [email, setEmail] = useState(admin?.email ?? '');
@@ -21,7 +33,7 @@ export const SettingsPage = () => {
   const [savingProfile, setSavingProfile] = useState(false);
   const [savingPassword, setSavingPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
+  const [revokeTarget, setRevokeTarget] = useState<SessionSummary | null>(null);
 
   const { data: sessions, loading: sessionsLoading, reload: reloadSessions } = useAsync(
     () => listSessions(),
@@ -36,16 +48,17 @@ export const SettingsPage = () => {
   const handleProfile = async () => {
     setSavingProfile(true);
     setError(null);
-    setMessage(null);
     try {
       const result = await updateProfile({
         name: name.trim() || undefined,
         email: email.trim() || undefined,
       });
       setAdmin(result.admin);
-      setMessage('Profile updated');
+      toast.success('Profile updated');
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Failed to update profile');
+      const message = cause instanceof Error ? cause.message : 'Failed to update profile';
+      setError(message);
+      toast.error('Could not update profile', message);
     } finally {
       setSavingProfile(false);
     }
@@ -58,154 +71,156 @@ export const SettingsPage = () => {
     }
     setSavingPassword(true);
     setError(null);
-    setMessage(null);
     try {
       await changePassword(currentPassword, newPassword);
-      setMessage('Password changed. You may be signed out on other devices.');
+      toast.success('Password changed', 'Other sessions may be signed out.');
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
       reloadSessions();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Failed to change password');
+      const message = cause instanceof Error ? cause.message : 'Failed to change password';
+      setError(message);
+      toast.error('Could not change password', message);
     } finally {
       setSavingPassword(false);
     }
   };
 
-  const handleRevoke = async (id: string) => {
-    if (!window.confirm('Revoke this session?')) return;
+  const handleRevoke = async () => {
+    if (!revokeTarget) return;
     try {
-      await revokeSession(id);
+      await revokeSession(revokeTarget.id);
+      toast.success('Session revoked');
+      setRevokeTarget(null);
       reloadSessions();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Failed to revoke session');
+      toast.error('Could not revoke session', cause instanceof Error ? cause.message : undefined);
     }
   };
 
   return (
-    <div className='grid gap-5'>
-      <PageHeader title='Account & settings' description='Manage your profile and security.' />
+    <div className='space-y-6'>
+      <div className='flex flex-col gap-1'>
+        <h1 className='text-2xl font-semibold tracking-tight text-foreground'>
+          Account & Settings
+        </h1>
+        <p className='text-sm text-muted-foreground'>Manage your profile and security.</p>
+      </div>
 
       <ErrorBanner message={error} />
-      {message && (
-        <div className='rounded-xl border border-primary/40 bg-primary/10 px-4 py-3 text-sm text-primary'>
-          {message}
-        </div>
-      )}
 
-      <Card className='grid gap-4'>
-        <h2 className='text-base font-semibold text-foreground'>Profile</h2>
-        <div className='grid gap-4 sm:grid-cols-2'>
-          <Field label='Name'>
-            <Input value={name} onChange={(e) => setName(e.target.value)} />
-          </Field>
-          <Field label='Email'>
-            <Input type='email' value={email} onChange={(e) => setEmail(e.target.value)} />
-          </Field>
-        </div>
-        <div className='flex justify-end'>
-          <Button onClick={handleProfile} disabled={savingProfile}>
-            {savingProfile ? <Spinner className='size-4' /> : null}
-            Save profile
-          </Button>
-        </div>
-      </Card>
-
-      <Card className='grid gap-4'>
-        <h2 className='text-base font-semibold text-foreground'>Password</h2>
-        <Field label='Current password'>
-          <Input
-            type='password'
-            value={currentPassword}
-            onChange={(e) => setCurrentPassword(e.target.value)}
-          />
-        </Field>
-        <div className='grid gap-4 sm:grid-cols-2'>
-          <Field label='New password' hint='Must be at least 10 chars with A-Z, a-z, 0-9'>
-            <Input
-              type='password'
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-            />
-          </Field>
-          <Field label='Confirm new password'>
-            <Input
-              type='password'
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-            />
-          </Field>
-        </div>
-        <div className='flex justify-end'>
-          <Button onClick={handlePassword} disabled={savingPassword}>
-            {savingPassword ? <Spinner className='size-4' /> : null}
-            Change password
-          </Button>
-        </div>
-      </Card>
-
-      <Card className='grid gap-4'>
-        <div className='flex items-center justify-between'>
-          <h2 className='text-base font-semibold text-foreground'>Sessions</h2>
-          <Button variant='outline' size='sm' onClick={() => reloadSessions()}>
-            Refresh
-          </Button>
-        </div>
-        {sessionsLoading && !sessions ? (
-          <LoadingState />
-        ) : sessions ? (
-          <div className='overflow-hidden rounded-xl border border-border'>
-            <table className='w-full text-sm'>
-              <thead className='bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground'>
-                <tr>
-                  <th className='px-4 py-2'>Created</th>
-                  <th className='px-4 py-2'>Last seen</th>
-                  <th className='px-4 py-2'>IP</th>
-                  <th className='px-4 py-2'>User agent</th>
-                  <th className='px-4 py-2'></th>
-                </tr>
-              </thead>
-              <tbody className='divide-y divide-border'>
-                {sessions.items.map((s) => (
-                  <tr key={s.id} className='bg-card'>
-                    <td className='px-4 py-2 text-xs text-muted-foreground'>
-                      {new Date(s.created_at).toLocaleString()}
-                    </td>
-                    <td className='px-4 py-2 text-xs text-muted-foreground'>
-                      {new Date(s.last_seen_at).toLocaleString()}
-                    </td>
-                    <td className='px-4 py-2 text-xs'>{s.ip ?? '-'}</td>
-                    <td className='max-w-sm truncate px-4 py-2 text-xs text-muted-foreground'>
-                      {s.user_agent ?? '-'}
-                    </td>
-                    <td className='px-4 py-2 text-right'>
-                      {s.current ? (
-                        <span className='text-xs text-primary'>Current</span>
-                      ) : (
-                        <Button
-                          variant='ghost'
-                          size='sm'
-                          onClick={() => handleRevoke(s.id)}
-                        >
-                          Revoke
-                        </Button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+      <div className='grid gap-5 lg:grid-cols-2'>
+        <SectionCard>
+          <SectionHeader title='Profile' />
+          <div className='grid gap-4 p-5'>
+            <Field label='Name'>
+              <Input value={name} onChange={(e) => setName(e.target.value)} />
+            </Field>
+            <Field label='Email'>
+              <Input type='email' value={email} onChange={(e) => setEmail(e.target.value)} />
+            </Field>
+            <div className='flex justify-end'>
+              <Button onClick={handleProfile} disabled={savingProfile}>
+                {savingProfile ? <Spinner className='size-4' /> : <UserCog className='size-4' />}
+                Save profile
+              </Button>
+            </div>
           </div>
-        ) : null}
-      </Card>
+        </SectionCard>
 
-      <Card>
-        <h2 className='text-base font-semibold text-foreground'>Danger zone</h2>
-        <p className='mt-1 text-sm text-muted-foreground'>
-          Sign out of your current admin session.
-        </p>
-        <div className='mt-4 flex justify-end'>
+        <SectionCard>
+          <SectionHeader title='Password' />
+          <div className='grid gap-4 p-5'>
+            <Field label='Current password'>
+              <Input
+                type='password'
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+              />
+            </Field>
+            <div className='grid gap-4 sm:grid-cols-2'>
+              <Field label='New password' hint='Min 10 chars with A-Z, a-z, 0-9'>
+                <Input
+                  type='password'
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                />
+              </Field>
+              <Field label='Confirm new password'>
+                <Input
+                  type='password'
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                />
+              </Field>
+            </div>
+            <div className='flex justify-end'>
+              <Button onClick={handlePassword} disabled={savingPassword}>
+                {savingPassword ? <Spinner className='size-4' /> : <ShieldCheck className='size-4' />}
+                Change password
+              </Button>
+            </div>
+          </div>
+        </SectionCard>
+      </div>
+
+      <SectionCard>
+        <SectionHeader
+          title='Active sessions'
+          description='Devices currently signed in to your account.'
+          actions={
+            <Button variant='outline' size='sm' onClick={() => reloadSessions()}>
+              <RefreshCw className='size-4' />
+              Refresh
+            </Button>
+          }
+        />
+        <div className='p-5'>
+          {sessionsLoading && !sessions ? (
+            <div className='space-y-2'>
+              {Array.from({ length: 3 }).map((_, index) => (
+                <Skeleton key={index} className='h-12 rounded-xl' />
+              ))}
+            </div>
+          ) : sessions && sessions.items.length === 0 ? (
+            <EmptyStateBlock icon={ShieldCheck} title='No active sessions' />
+          ) : (
+            <ul className='space-y-2'>
+              {sessions?.items.map((session) => (
+                <li
+                  key={session.id}
+                  className='flex flex-wrap items-center gap-3 rounded-xl border border-border/60 p-3'
+                >
+                  <span className='min-w-0 flex-1'>
+                    <span className='flex items-center gap-2 text-sm font-medium text-foreground'>
+                      {session.ip ?? 'Unknown IP'}
+                      {session.current && (
+                        <span className='rounded-full border border-[color:var(--admin-success)]/40 bg-[color:var(--admin-success)]/10 px-2 py-0.5 text-[10px] font-medium text-[color:var(--admin-success)]'>
+                          This device
+                        </span>
+                      )}
+                    </span>
+                    <span className='mt-0.5 block truncate text-xs text-muted-foreground'>
+                      {session.user_agent ?? 'Unknown browser'} · seen{' '}
+                      {formatRelative(session.last_seen_at)}
+                    </span>
+                  </span>
+                  {!session.current && (
+                    <Button variant='ghost' size='sm' onClick={() => setRevokeTarget(session)}>
+                      Revoke
+                    </Button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </SectionCard>
+
+      <SectionCard>
+        <SectionHeader title='Danger zone' description='End your current admin session.' />
+        <div className='flex justify-end p-5'>
           <Button
             variant='destructive'
             onClick={async () => {
@@ -216,7 +231,21 @@ export const SettingsPage = () => {
             Sign out
           </Button>
         </div>
-      </Card>
+      </SectionCard>
+
+      <ConfirmDialog
+        open={Boolean(revokeTarget)}
+        onClose={() => setRevokeTarget(null)}
+        onConfirm={handleRevoke}
+        destructive
+        confirmLabel='Revoke session'
+        title='Revoke this session?'
+        description={
+          revokeTarget
+            ? `${revokeTarget.ip ?? 'This device'} will be signed out immediately.`
+            : undefined
+        }
+      />
     </div>
   );
 };

@@ -46,6 +46,13 @@ export type ExperienceInput = Partial<Omit<Experience, 'id'>>;
 export type ServiceInput = Partial<Omit<ServiceItem, 'id'>>;
 export type NavInput = Partial<Omit<NavLink, 'id'>>;
 
+export type MediaListParams = {
+  page?: number;
+  pageSize?: number;
+  search?: string;
+  sort?: 'newest' | 'oldest';
+};
+
 type QueryValue = string | number | boolean | undefined;
 
 const toQuery = (params: Record<string, QueryValue>): string => {
@@ -98,7 +105,7 @@ export const setProjectFeatured = (id: string, featured: boolean) =>
 
 /* ---------------------------------- Media -------------------------------- */
 
-export const listMedia = (params: { page?: number; pageSize?: number; search?: string } = {}) =>
+export const listMedia = (params: MediaListParams = {}) =>
   apiFetch<Paginated<MediaItem>>(`/api/admin/media${toQuery(params)}`);
 
 export const uploadMedia = (file: File) => {

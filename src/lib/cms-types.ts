@@ -166,6 +166,19 @@ export type DashboardStats = {
     status: ProjectStatus;
     updatedAt: string;
   }>;
+  recentMessages: Array<{
+    id: string;
+    name: string;
+    subject: string;
+    status: MessageStatus;
+    createdAt: string;
+  }>;
+  recentMedia: Array<{
+    id: string;
+    filename: string;
+    url: string;
+    createdAt: string;
+  }>;
 };
 
 export type Paginated<T> = {

@@ -25,6 +25,19 @@ export type DashboardStats = {
     status: 'draft' | 'published';
     updatedAt: string;
   }>;
+  recentMessages: Array<{
+    id: string;
+    name: string;
+    subject: string;
+    status: 'unread' | 'read' | 'archived';
+    createdAt: string;
+  }>;
+  recentMedia: Array<{
+    id: string;
+    filename: string;
+    url: string;
+    createdAt: string;
+  }>;
 };
 
 export const getDashboardStats = async (): Promise<DashboardStats> => {
@@ -64,6 +77,31 @@ export const getDashboardStats = async (): Promise<DashboardStats> => {
      limit 5`,
   );
 
+  const recentMessageRows = await db.query<{
+    id: string;
+    name: string;
+    subject: string;
+    status: 'unread' | 'read' | 'archived';
+    created_at: string;
+  }>(
+    `select id, name, subject, status, created_at
+     from messages
+     order by created_at desc
+     limit 5`,
+  );
+
+  const recentMediaRows = await db.query<{
+    id: string;
+    filename: string;
+    url: string;
+    created_at: string;
+  }>(
+    `select id, filename, url, created_at
+     from media
+     order by created_at desc
+     limit 6`,
+  );
+
   const projects = projectRows[0];
   const media = mediaRows[0];
   const messages = messageRows[0];
@@ -88,6 +126,19 @@ export const getDashboardStats = async (): Promise<DashboardStats> => {
       title: row.title,
       status: row.status,
       updatedAt: row.updated_at,
+    })),
+    recentMessages: recentMessageRows.map((row) => ({
+      id: row.id,
+      name: row.name,
+      subject: row.subject,
+      status: row.status,
+      createdAt: row.created_at,
+    })),
+    recentMedia: recentMediaRows.map((row) => ({
+      id: row.id,
+      filename: row.filename,
+      url: row.url,
+      createdAt: row.created_at,
     })),
   };
 };
