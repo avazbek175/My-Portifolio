@@ -53,7 +53,23 @@ export const apiFetch = async <T>(
   if (response.status === 204) return undefined as T;
 
   const text = await response.text();
-  const data = text ? (JSON.parse(text) as unknown) : null;
+  const contentType = response.headers.get('content-type') ?? '';
+  const isJson = contentType.includes('application/json');
+
+  let data: unknown = null;
+  if (text) {
+    if (isJson) {
+      try {
+        data = JSON.parse(text) as unknown;
+      } catch {
+        data = null;
+      }
+    } else {
+      // Non-JSON body (e.g. a hosting/proxy error page). Keep a short, safe
+      // snippet for debugging instead of throwing a JSON parsing exception.
+      data = { error: { code: 'invalid_response', message: text.slice(0, 200) } };
+    }
+  }
 
   if (!response.ok) {
     const error = (data as { error?: { code?: string; message?: string; details?: unknown } })
@@ -63,6 +79,14 @@ export const apiFetch = async <T>(
       error?.code ?? 'request_failed',
       error?.message ?? response.statusText ?? 'Request failed',
       error?.details,
+    );
+  }
+
+  if (text && !isJson) {
+    throw new ApiError(
+      response.status,
+      'invalid_response',
+      'The server returned an unexpected response',
     );
   }
 

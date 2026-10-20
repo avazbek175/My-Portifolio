@@ -59,6 +59,13 @@ export const createApp = () => {
   admin.route('/audit', auditRoutes);
   app.route('/api/admin', admin);
 
+  app.notFound((c) =>
+    c.json(
+      { error: { code: 'not_found', message: 'Resource not found' } },
+      404,
+    ),
+  );
+
   app.onError((error, c) => {
     if (error instanceof AppError) {
       return c.json(
