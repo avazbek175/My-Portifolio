@@ -8,7 +8,7 @@ import type { AvifOptions, FormatEnum, JpegOptions, PngOptions, Sharp, WebpOptio
 import { getDb, json } from '../db';
 import { env } from '../env';
 import { AppError, badRequest } from '../lib/errors';
-import { buildStorageKey, getStorage } from '../storage';
+import { buildStorageKey, getStorage, StorageError } from '../storage';
 
 export type Media = {
   id: string;
@@ -142,6 +142,11 @@ export const storeImage = async (input: {
     key,
     body: processed.buffer,
     contentType: processed.mimeType,
+  }).catch((error: unknown) => {
+    if (error instanceof StorageError) {
+      throw new AppError(502, 'storage_error', 'The image could not be stored');
+    }
+    throw error;
   });
 
   const db = await getDb();
@@ -173,10 +178,12 @@ export const listMedia = async (options: {
   page?: number;
   pageSize?: number;
   search?: string;
+  sort?: 'newest' | 'oldest';
 }): Promise<{ items: Media[]; total: number; page: number; pageSize: number }> => {
   const db = await getDb();
   const page = Math.max(1, options.page ?? 1);
   const pageSize = Math.min(100, Math.max(1, options.pageSize ?? 24));
+  const order = options.sort === 'oldest' ? 'asc' : 'desc';
 
   const conditions: string[] = [];
   const params: unknown[] = [];
@@ -197,7 +204,7 @@ export const listMedia = async (options: {
   const offsetIdx = params.length;
 
   const rows = await db.query<MediaRow>(
-    `select * from media ${where} order by created_at desc
+    `select * from media ${where} order by created_at ${order}
      limit $${limitIdx} offset $${offsetIdx}`,
     params,
   );
@@ -244,7 +251,12 @@ export const deleteMedia = async (id: string): Promise<void> => {
   }
 
   // Delete the object first; only remove metadata if storage deletion succeeds.
-  await getStorage().delete(media.storageKey);
+  await getStorage().delete(media.storageKey).catch((error: unknown) => {
+    if (error instanceof StorageError) {
+      throw new AppError(502, 'storage_error', 'The image could not be deleted');
+    }
+    throw error;
+  });
 
   const db = await getDb();
   await db.query('delete from media where id = $1', [id]);

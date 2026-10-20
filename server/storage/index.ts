@@ -12,6 +12,14 @@ export type PutInput = {
   contentType: string;
 };
 
+/** Raised when the configured object store rejects or fails an operation. */
+export class StorageError extends Error {
+  constructor(message: string, options?: { cause?: unknown }) {
+    super(message, options);
+    this.name = 'StorageError';
+  }
+}
+
 export interface StorageAdapter {
   name: 'local' | 'vercel-blob';
   put(input: PutInput): Promise<{ key: string; url: string }>;

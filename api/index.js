@@ -15389,6 +15389,18 @@ var getDashboardStats = async () => {
      order by updated_at desc
      limit 5`
   );
+  const recentMessageRows = await db.query(
+    `select id, name, subject, status, created_at
+     from messages
+     order by created_at desc
+     limit 5`
+  );
+  const recentMediaRows = await db.query(
+    `select id, filename, url, created_at
+     from media
+     order by created_at desc
+     limit 6`
+  );
   const projects = projectRows[0];
   const media = mediaRows[0];
   const messages = messageRows[0];
@@ -15412,6 +15424,19 @@ var getDashboardStats = async () => {
       title: row.title,
       status: row.status,
       updatedAt: row.updated_at
+    })),
+    recentMessages: recentMessageRows.map((row) => ({
+      id: row.id,
+      name: row.name,
+      subject: row.subject,
+      status: row.status,
+      createdAt: row.created_at
+    })),
+    recentMedia: recentMediaRows.map((row) => ({
+      id: row.id,
+      filename: row.filename,
+      url: row.url,
+      createdAt: row.created_at
     }))
   };
 };
@@ -15455,6 +15480,71 @@ var localStorage = {
   }
 };
 
+// server/storage/vercel-blob.ts
+import { del, get, put } from "@vercel/blob";
+var blobAccess = process.env.BLOB_ACCESS?.trim() === "public" ? "public" : "private";
+var blobStorage = {
+  name: "vercel-blob",
+  async put({ key, body, contentType }) {
+    let result;
+    try {
+      result = await put(key, body, {
+        access: blobAccess,
+        contentType,
+        addRandomSuffix: false,
+        token: env.storage.blobToken
+      });
+    } catch (error48) {
+      throw new StorageError(
+        `Failed to store object: ${error48 instanceof Error ? error48.message : String(error48)}`,
+        { cause: error48 }
+      );
+    }
+    const url2 = blobAccess === "public" ? result.url : `${env.storage.publicPrefix}/${key}`;
+    return { key, url: url2 };
+  },
+  async delete(key) {
+    try {
+      await del(key, { token: env.storage.blobToken });
+    } catch (error48) {
+      throw new StorageError(
+        `Failed to delete object: ${error48 instanceof Error ? error48.message : String(error48)}`,
+        { cause: error48 }
+      );
+    }
+  },
+  publicUrl(key) {
+    return key;
+  },
+  async read(key) {
+    const result = await get(key, {
+      access: blobAccess,
+      token: env.storage.blobToken
+    });
+    if (!result || result.statusCode !== 200 || !result.stream) {
+      throw new Error("Blob not found");
+    }
+    const response = new Response(result.stream);
+    return Buffer.from(await response.arrayBuffer());
+  }
+};
+
+// server/storage/index.ts
+var StorageError = class extends Error {
+  constructor(message, options) {
+    super(message, options);
+    this.name = "StorageError";
+  }
+};
+var getStorage = () => env.storage.driver === "vercel-blob" ? blobStorage : localStorage;
+var buildStorageKey = (extension) => {
+  const now = /* @__PURE__ */ new Date();
+  const yyyy = now.getUTCFullYear();
+  const mm = String(now.getUTCMonth() + 1).padStart(2, "0");
+  const id = globalThis.crypto.randomUUID();
+  return `media/${yyyy}/${mm}/${id}.${extension}`;
+};
+
 // server/routes/files.ts
 var CONTENT_TYPES = {
   jpg: "image/jpeg",
@@ -15471,12 +15561,13 @@ var contentTypeFor = (key) => {
 };
 var filesRoutes = new Hono5();
 filesRoutes.get("/:key{.+}", async (c) => {
-  if (env.storage.driver !== "local") {
+  const storage = getStorage();
+  if (!storage.read) {
     return c.notFound();
   }
   const key = c.req.param("key");
   try {
-    const buffer = await localStorage.read(key);
+    const buffer = await storage.read(key);
     return c.body(new Uint8Array(buffer), 200, {
       "Content-Type": contentTypeFor(key),
       "Cache-Control": "public, max-age=31536000, immutable"
@@ -15492,39 +15583,6 @@ import { Hono as Hono6 } from "hono";
 // server/services/media.service.ts
 import { randomUUID as randomUUID4 } from "node:crypto";
 import sharp from "sharp";
-
-// server/storage/vercel-blob.ts
-import { del, put } from "@vercel/blob";
-var blobStorage = {
-  name: "vercel-blob",
-  async put({ key, body, contentType }) {
-    const result = await put(key, body, {
-      access: "public",
-      contentType,
-      addRandomSuffix: false,
-      token: env.storage.blobToken
-    });
-    return { key, url: result.url };
-  },
-  async delete(key) {
-    await del(key, { token: env.storage.blobToken });
-  },
-  publicUrl(key) {
-    return key;
-  }
-};
-
-// server/storage/index.ts
-var getStorage = () => env.storage.driver === "vercel-blob" ? blobStorage : localStorage;
-var buildStorageKey = (extension) => {
-  const now = /* @__PURE__ */ new Date();
-  const yyyy = now.getUTCFullYear();
-  const mm = String(now.getUTCMonth() + 1).padStart(2, "0");
-  const id = globalThis.crypto.randomUUID();
-  return `media/${yyyy}/${mm}/${id}.${extension}`;
-};
-
-// server/services/media.service.ts
 var mapMedia = (row) => ({
   id: row.id,
   url: row.url,
@@ -15588,6 +15646,11 @@ var storeImage = async (input) => {
     key,
     body: processed.buffer,
     contentType: processed.mimeType
+  }).catch((error48) => {
+    if (error48 instanceof StorageError) {
+      throw new AppError(502, "storage_error", "The image could not be stored");
+    }
+    throw error48;
   });
   const db = await getDb();
   const id = randomUUID4();
@@ -15615,6 +15678,7 @@ var listMedia = async (options) => {
   const db = await getDb();
   const page = Math.max(1, options.page ?? 1);
   const pageSize = Math.min(100, Math.max(1, options.pageSize ?? 24));
+  const order = options.sort === "oldest" ? "asc" : "desc";
   const conditions = [];
   const params = [];
   if (options.search) {
@@ -15631,7 +15695,7 @@ var listMedia = async (options) => {
   params.push((page - 1) * pageSize);
   const offsetIdx = params.length;
   const rows = await db.query(
-    `select * from media ${where} order by created_at desc
+    `select * from media ${where} order by created_at ${order}
      limit $${limitIdx} offset $${offsetIdx}`,
     params
   );
@@ -15670,7 +15734,12 @@ var deleteMedia = async (id) => {
       "This image is used by existing content and cannot be deleted."
     );
   }
-  await getStorage().delete(media.storageKey);
+  await getStorage().delete(media.storageKey).catch((error48) => {
+    if (error48 instanceof StorageError) {
+      throw new AppError(502, "storage_error", "The image could not be deleted");
+    }
+    throw error48;
+  });
   const db = await getDb();
   await db.query("delete from media where id = $1", [id]);
 };
@@ -15679,7 +15748,8 @@ var deleteMedia = async (id) => {
 var listQuerySchema = external_exports.object({
   page: external_exports.coerce.number().int().min(1).optional(),
   pageSize: external_exports.coerce.number().int().min(1).max(100).optional(),
-  search: external_exports.string().trim().max(120).optional()
+  search: external_exports.string().trim().max(120).optional(),
+  sort: external_exports.enum(["newest", "oldest"]).optional()
 });
 var mediaRoutes = new Hono6();
 mediaRoutes.get("/", async (c) => {

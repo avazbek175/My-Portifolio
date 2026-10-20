@@ -1,12 +1,12 @@
 /**
- * Local storage file serving (development / fallback).
+ * Stored file serving.
  *
- * Uploaded objects use content-addressed paths and are immutable.
+ * Local uploads and private Vercel Blobs are both streamed back to the browser
+ * through this route. Objects use content-addressed, immutable keys.
  */
 
 import { Hono } from 'hono';
-import { env } from '../env';
-import { localStorage } from '../storage/local';
+import { getStorage } from '../storage';
 import type { AppEnv } from '../types';
 
 const CONTENT_TYPES: Record<string, string> = {
@@ -27,14 +27,15 @@ const contentTypeFor = (key: string): string => {
 export const filesRoutes = new Hono<AppEnv>();
 
 filesRoutes.get('/:key{.+}', async (c) => {
-  if (env.storage.driver !== 'local') {
+  const storage = getStorage();
+  if (!storage.read) {
     return c.notFound();
   }
 
   const key = c.req.param('key');
 
   try {
-    const buffer = await localStorage.read!(key);
+    const buffer = await storage.read(key);
     return c.body(new Uint8Array(buffer), 200, {
       'Content-Type': contentTypeFor(key),
       'Cache-Control': 'public, max-age=31536000, immutable',
