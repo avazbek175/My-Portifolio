@@ -6,6 +6,9 @@
  * Here we pre-bundle the whole API into a single self-contained ESM file so
  * every local module is inlined, while native/Node packages stay external and
  * are installed by the platform.
+ *
+ * The output is written to `api/index.js`; `vercel.json` rewrites every
+ * `/api/:path*` request to this single function.
  */
 
 import { build } from 'esbuild';
