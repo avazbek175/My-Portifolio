@@ -4,17 +4,47 @@
  */
 
 // Node modules
-import { useState } from "react";
-import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { useEffect, useState } from "react";
+import {
+  Sheet,
+  SheetClose,
+  SheetContent,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-import { Ghost, MenuIcon } from "lucide-react";
+import { MenuIcon } from "lucide-react";
 
-import { navLinks, socialLinks } from "@/constants";
+import { useSiteContent } from '@/context/ContentContext.hooks';
 
 export const Sidebar = () => {
+    const { navLinks, socialLinks } = useSiteContent();
     const [active, setActive] = useState<string>('#hero');
+
+    useEffect(() => {
+        const sections = navLinks
+            .map((link) => document.querySelector(link.link))
+            .filter((el): el is Element => Boolean(el));
+
+        const observer = new IntersectionObserver(
+            (entries) => {
+                const visible = entries
+                    .filter((entry) => entry.isIntersecting)
+                    .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+
+                if (visible?.target.id) {
+                    setActive(`#${visible.target.id}`);
+                }
+            },
+            { rootMargin: '-45% 0px -45% 0px', threshold: [0, 0.25, 0.5, 1] },
+        );
+
+        sections.forEach((section) => observer.observe(section));
+
+        return () => observer.disconnect();
+    }, [navLinks]);
 
     return <>
     <Sheet>
@@ -30,20 +60,36 @@ export const Sidebar = () => {
                 {navLinks.map((link) => {
                     const Icon = link.icon;
 
-                    return <a key={link.label} href={link.link} onClick={() => setActive(link.link)} className={cn('text-neutral-300 flex items-center gap-2 hover:text-primary transition-colors duration-200 text-base', active === link.link && 'text-primary'
-                    )}>
-                        <Icon className="size-4" /> {link.label}
-                    </a>
-
+                    return (
+                        <SheetClose asChild key={link.label}>
+                            <a
+                                href={link.link}
+                                onClick={() => setActive(link.link)}
+                                className={cn(
+                                    'text-neutral-300 flex items-center gap-2 hover:text-primary transition-colors duration-200 text-base',
+                                    active === link.link && 'text-primary',
+                                )}
+                            >
+                                <Icon className="size-4" /> {link.label}
+                            </a>
+                        </SheetClose>
+                    );
                 })}
             </nav>
             <div className="mt-30">
                 <p className="pb-2">Socials</p>
                 <div className="flex gap-3 text-neutral-500">
-                    {socialLinks.map((social, i) => {
+                    {socialLinks.map((social) => {
                         const Icon = social.icon;
                         return(
-                            <a key={i} href={social.link} className="hover:text-primary">
+                            <a
+                                key={social.label}
+                                href={social.link}
+                                aria-label={social.label}
+                                target="_blank"
+                                rel="noreferrer noopener"
+                                className="hover:text-primary transition-colors"
+                            >
                                 <Icon className='size-4'/>
                             </a>
                         )

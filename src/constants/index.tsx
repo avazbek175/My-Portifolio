@@ -1,5 +1,5 @@
 /**
- * @copyright 2025 codewithsadee
+ * @copyright 2025 cyberavaz
  * @license Apache-2.0
  */
 
@@ -7,7 +7,10 @@
  * Types
  */
 import type {
+  AboutType,
+  ContactInfoType,
   ExperienceType,
+  HeroType,
   LinksType,
   ProjectType,
   ServiceType,
@@ -21,12 +24,13 @@ import type {
  */
 import {
   Briefcase,
-  Facebook,
   FileText,
+  Github,
   Globe,
   Home,
   Instagram,
   Layers,
+  Linkedin,
   Mail,
   MessageCircle,
   Palette,
@@ -35,8 +39,35 @@ import {
   Smartphone,
   Twitter,
   User,
-  Youtube,
 } from 'lucide-react';
+
+const heroData: HeroType = {
+  badge: 'Available for freelance work',
+  greeting: "Hi, I'm",
+  name: 'Avazbek',
+  role: 'Frontend Designer & Developer',
+  description:
+    'I design and build fast, accessible and pixel-perfect web experiences with React, TypeScript and Tailwind CSS. From concept to deployment, I turn ideas into clean, modern interfaces.',
+};
+
+const aboutData: AboutType = {
+  bio: [
+    'I am a frontend developer and UI designer based in Tashkent, Uzbekistan. I specialize in building modern, responsive web applications with a strong focus on performance, accessibility and delightful interactions.',
+    'My toolkit covers the full frontend stack — React, TypeScript, Next.js, Tailwind CSS, Node.js and MongoDB. I love working with design systems, motion and clean architecture to deliver products that feel as good as they look.',
+  ],
+  highlights: [
+    'Frontend architecture & design systems',
+    'Responsive, accessible interfaces',
+    'Motion & micro-interactions',
+    'API integration & full-stack features',
+  ],
+};
+
+const contactInfo: ContactInfoType = {
+  email: 'avazbek.bug@gmail.com',
+  phone: '+998 90 000 00 00',
+  location: 'Tashkent, Uzbekistan',
+};
 
 const navLinks: LinksType[] = [
   { label: 'Home', link: '#hero', icon: Home },
@@ -62,24 +93,24 @@ const navLinks: LinksType[] = [
 
 const socialLinks: LinksType[] = [
   {
-    icon: Facebook,
-    label: 'Facebook',
-    link: '/#',
+    icon: Github,
+    label: 'GitHub',
+    link: 'https://github.com/avazbek175',
   },
   {
-    icon: Instagram,
-    label: 'Instagram',
-    link: '/#',
+    icon: Linkedin,
+    label: 'LinkedIn',
+    link: 'https://www.linkedin.com/',
   },
   {
     icon: Twitter,
     label: 'Twitter',
-    link: '/#',
+    link: 'https://twitter.com/',
   },
   {
-    icon: Youtube,
-    label: 'Youtube',
-    link: '/#',
+    icon: Instagram,
+    label: 'Instagram',
+    link: 'https://www.instagram.com/',
   },
 ];
 
@@ -186,31 +217,31 @@ const services: ServiceType[] = [
     title: 'Brand Identity',
     desc: 'I craft modern visual identities that help brands stand out through strong typography, colors, and minimal design.',
     projects: '32 Projects',
-    icon: <Palette className='h-6 w-6 text-green-400' />,
+    icon: <Palette className='h-6 w-6 text-primary' />,
   },
   {
     title: 'UI/UX Design',
     desc: 'Designing clean, intuitive, and user-friendly interfaces that improve user experience and boost conversions.',
     projects: '47 Projects',
-    icon: <Layers className='h-6 w-6 text-green-400' />,
+    icon: <Layers className='h-6 w-6 text-primary' />,
   },
   {
     title: 'Web Development',
     desc: 'Building high-performance, SEO-friendly websites using Next.js, Tailwind, and modern web technologies.',
     projects: '58 Projects',
-    icon: <Globe className='h-6 w-6 text-green-400' />,
+    icon: <Globe className='h-6 w-6 text-primary' />,
   },
   {
     title: 'Mobile App Design',
     desc: 'Creating pixel-perfect app interfaces optimized for both iOS and Android devices with smooth usability.',
     projects: '21 Projects',
-    icon: <Smartphone className='h-6 w-6 text-green-400' />,
+    icon: <Smartphone className='h-6 w-6 text-primary' />,
   },
   {
     title: 'Product Launch Strategy',
     desc: 'Helping startups prepare their digital products for launch with design systems, marketing pages, and assets.',
     projects: '15 Projects',
-    icon: <Rocket className='h-6 w-6 text-green-400' />,
+    icon: <Rocket className='h-6 w-6 text-primary' />,
   },
 ];
 
@@ -254,6 +285,9 @@ const testimonials: TestimonialsType[] = [
 ];
 
 export {
+  heroData,
+  aboutData,
+  contactInfo,
   socialLinks,
   projectsData,
   education,

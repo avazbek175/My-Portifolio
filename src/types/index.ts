@@ -49,3 +49,22 @@ export type LinksType = {
   link: string;
   icon: React.ElementType;
 };
+
+export type HeroType = {
+  badge: string;
+  greeting: string;
+  name: string;
+  role: string;
+  description: string;
+};
+
+export type AboutType = {
+  bio: string[];
+  highlights: string[];
+};
+
+export type ContactInfoType = {
+  email: string;
+  phone: string;
+  location: string;
+};
